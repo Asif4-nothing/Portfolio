@@ -95,13 +95,27 @@
     
     <section id="contact" class="contact-section">
         <h2>Get In Touch</h2>
-        <form class="contact-form liquid-card">
-            <p>I'm open to collaborations and freelance work. Say hi!</p>
-            <input type="text" name="name" placeholder="Your Name" required>
-            <input type="email" name="email" placeholder="Your Email" required>
-            <textarea name="message" placeholder="Your Message" rows="5" required></textarea>
-            <button type="submit" class="liquid-button primary-button">Send Message</button>
-        </form>
+        <!-- Replace your existing <form class="contact-form ..."> block with this -->
+<form name="contact"
+      method="POST"
+      data-netlify="true"
+      netlify-honeypot="bot-field"
+      class="contact-form liquid-card"
+      action="/success">
+  <!-- Netlify needs this to associate the submission with the form -->
+  <input type="hidden" name="form-name" value="contact">
+
+  <!-- Honeypot field (hidden from users, used to catch bots) -->
+  <p style="display:none">
+    <label>Don’t fill this out if you're human: <input name="bot-field" /></label>
+  </p>
+
+  <p>I'm open to collaborations and freelance work. Say hi!</p>
+  <input type="text" name="name" placeholder="Your Name" required>
+  <input type="email" name="email" placeholder="Your Email" required>
+  <textarea name="message" placeholder="Your Message" rows="5" required></textarea>
+  <button type="submit" class="liquid-button primary-button">Send Message</button>
+</form>
     </section>
 
     <footer>
@@ -112,3 +126,4 @@
     <script src="script.js" defer></script> 
 </body>
 </html>
+
