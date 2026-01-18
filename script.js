@@ -24,13 +24,13 @@ function throttle(func, limit) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    
+
     // --- 1. SMOOTH SCROLLING for Internal Links (Optimized) ---
     const anchors = document.querySelectorAll('a[href^="#"]');
     anchors.forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             if (this.getAttribute('href') === '#') return;
-            
+
             e.preventDefault();
             const targetId = this.getAttribute('href').substring(1);
             const targetElement = document.getElementById(targetId);
@@ -47,71 +47,107 @@ document.addEventListener('DOMContentLoaded', () => {
         }, { passive: false });
     });
 
-    // --- 2. CONTACT FORM HANDLING (Optimized) ---
+    // --- 2. CONTACT FORM HANDLING (Netlify-compatible + fallback) ---
     const contactForm = document.querySelector('.contact-form');
-    
+
     if (contactForm) {
         // Debounced form validation
         const inputs = contactForm.querySelectorAll('input, textarea');
         inputs.forEach(input => {
             input.addEventListener('input', debounce(() => {
-                // Real-time validation can be added here
                 if (input.checkValidity()) {
                     input.style.borderColor = 'rgba(0, 255, 255, 0.3)';
+                } else {
+                    input.style.borderColor = '';
                 }
             }, 300));
         });
 
-        contactForm.addEventListener('submit', function (e) {
+        contactForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
+            // collect form data
             const formData = new FormData(contactForm);
             const data = {};
-            
             formData.forEach((value, key) => (data[key] = value));
 
-            // Show loading state
+            // UI: loading state
             const submitButton = contactForm.querySelector('button[type="submit"]');
             const originalText = submitButton.textContent;
             submitButton.textContent = 'Sending...';
             submitButton.disabled = true;
-            
-            // Cloudflare Worker endpoint
-            // Update this URL with your deployed Cloudflare Worker URL
-            // For local development, use: http://localhost:8787/api/contact
-            // You can also set this via a data attribute on the form or a global variable
-            const apiEndpoint = window.API_ENDPOINT || 
-                                'https://dry-bonus-482a.asifahmadbengal04.workers.dev/api/contact';
-            
-            fetch(apiEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
-            })
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
+
+            // Determine endpoint behavior:
+            // If form has data-netlify or window.API_ENDPOINT === '/', send to Netlify (urlencoded to '/')
+            // Otherwise send JSON to API_ENDPOINT (if provided) or fallback to '/'
+            const apiEndpoint = window.API_ENDPOINT || '/';
+            const isNetlify = contactForm.hasAttribute('data-netlify') || apiEndpoint === '/';
+
+            // helper to encode for application/x-www-form-urlencoded
+            const encode = (obj) =>
+                Object.keys(obj)
+                      .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(obj[k]))
+                      .join('&');
+
+            try {
+                let response;
+
+                if (isNetlify) {
+                    // Netlify requires form-name field to match the <form name="...">
+                    // Ensure the form has a name attribute (we expect name="contact")
+                    const formName = contactForm.getAttribute('name') || 'contact';
+                    const payload = Object.assign({ 'form-name': formName }, data);
+
+                    response = await fetch('/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: encode(payload)
+                    });
+
+                    // Netlify returns HTML on redirect or 200, treat any ok status as success
+                    if (!response.ok) {
+                        throw new Error(`Netlify form submit failed: ${response.status}`);
+                    }
+                } else {
+                    // Post JSON to custom API endpoint (existing Cloudflare worker or other)
+                    response = await fetch(apiEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (!response.ok) {
+                        // try to parse JSON error for more detail
+                        let text = await response.text().catch(() => '');
+                        throw new Error(`API submit failed: ${response.status} - ${text}`);
+                    }
                 }
-                throw new Error('Network response was not ok.');
-            })
-            .then(result => {
+
+                // success UI
                 submitButton.textContent = '✓ Sent!';
-                submitButton.style.background = 'rgba(0, 255, 0, 0.2)';
+                submitButton.style.background = 'rgba(0, 255, 0, 0.15)';
+                // reset after short delay
                 setTimeout(() => {
                     contactForm.reset();
                     submitButton.textContent = originalText;
                     submitButton.disabled = false;
                     submitButton.style.background = '';
-                }, 2000);
-            })
-            .catch(error => {
-                console.error('Error submitting form:', error);
+                }, 1800);
+
+                console.info('Form submitted successfully', { isNetlify, endpoint: isNetlify ? '/' : apiEndpoint });
+            } catch (err) {
+                console.error('Error submitting form:', err);
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
-                alert('Oops! There was an error sending your message. Please try again later.');
-            });
+
+                // show friendly error to user
+                alert('Oops — something went wrong sending your message. Please try again later.');
+
+                // Optional: fallback: open user's email client prefilled (uncomment if desired)
+                // const email = data.email || '';
+                // const message = data.message ? encodeURIComponent(data.message) : '';
+                // window.location = `mailto:asifahmadbengal04@gmail.com?subject=Portfolio%20message%20from%20${encodeURIComponent(data.name || '')}&body=${message}`;
+            }
         });
     }
 
@@ -124,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const rect = card.getBoundingClientRect();
             const x = ((e.clientX - rect.left) / rect.width) * 100;
             const y = ((e.clientY - rect.top) / rect.height) * 100;
-            
+
             // Use CSS variables instead of direct style manipulation
             requestAnimationFrame(() => {
                 card.style.setProperty('--mouse-x', `${x}%`);
@@ -145,12 +181,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 4. NAVBAR SCROLL EFFECT (Performance Optimized) ---
     const navbar = document.querySelector('.liquid-navbar');
     if (navbar) {
-        let lastScrollY = window.scrollY;
         let ticking = false;
 
         const updateNavbar = () => {
             const scrollY = window.scrollY;
-            
+
             if (scrollY > 50) {
                 navbar.style.background = 'rgba(255, 255, 255, 0.12)';
                 navbar.style.backdropFilter = 'blur(30px) saturate(180%)';
@@ -158,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 navbar.style.background = 'rgba(255, 255, 255, 0.08)';
                 navbar.style.backdropFilter = 'blur(25px) saturate(180%)';
             }
-            
+
             ticking = false;
         };
 
